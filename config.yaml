@@ -1,9 +1,18 @@
 servers:
   claude:
     url: http://localhost:3100
+    cmd: node
+    args: ["server.mjs"]
+    dir: servers/claude
   gemini:
     url: http://localhost:3200
+    cmd: node
+    args: ["packages/cli/dist/index.js", "--serve", "--port", "3200"]
+    dir: ../gemini-cli
   copilot:
     url: http://localhost:3300
+    cmd: npx
+    args: ["tsx", "server.ts"]
+    dir: servers/copilot
 
 default_agent: claude

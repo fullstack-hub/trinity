@@ -7,7 +7,10 @@ import (
 )
 
 type ServerConfig struct {
-	URL string `yaml:"url"`
+	URL  string   `yaml:"url"`
+	Cmd  string   `yaml:"cmd"`
+	Args []string `yaml:"args"`
+	Dir  string   `yaml:"dir"`
 }
 
 type Config struct {
