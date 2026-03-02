@@ -388,7 +388,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			mainW = 30
 			sidebarW = a.width - mainW
 		}
-		sideFixedH := 3
+		sideFixedH := 5
 		sideVPH := chatH - sideFixedH
 		if sideVPH < 5 {
 			sideVPH = 5
@@ -1784,7 +1784,7 @@ func (a *App) View() string {
 	}
 
 	// Sidebar: scrollable content + fixed bottom
-	sideFixedH := 3
+	sideFixedH := 5
 	sideVPH := chatH - sideFixedH
 	if sideVPH < 5 {
 		sideVPH = 5

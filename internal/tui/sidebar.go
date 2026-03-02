@@ -394,10 +394,12 @@ func (s *Sidebar) RenderScrollable() string {
 	return strings.Join(rendered, "\n")
 }
 
-// RenderFixed returns the fixed bottom strip (cwd + git branch).
+// RenderFixed returns the fixed bottom strip (cwd:branch + version).
 func (s *Sidebar) RenderFixed() string {
 	dim := lipgloss.NewStyle().Foreground(lipgloss.Color("242"))
-	branchColor := lipgloss.NewStyle().Foreground(lipgloss.Color("117"))
+	white := lipgloss.NewStyle().Foreground(lipgloss.Color("252"))
+	green := lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
+	bold := lipgloss.NewStyle().Foreground(lipgloss.Color("252")).Bold(true)
 	border := dim.Render("┃")
 	contentW := s.width - 3
 	if contentW < 10 {
@@ -407,26 +409,35 @@ func (s *Sidebar) RenderFixed() string {
 	// Separator
 	sep := border + dim.Render(strings.Repeat("─", contentW+1))
 
-	// CWD + git branch
+	// Line 1: cwd path (italic style via dim)
 	cwd := s.workDir
 	maxCwd := contentW - 2
-	if s.gitBranch != "" {
-		maxCwd = contentW - len(s.gitBranch) - 5
-	}
 	if maxCwd < 10 {
 		maxCwd = 10
 	}
 	if len(cwd) > maxCwd {
 		cwd = "…" + cwd[len(cwd)-maxCwd+1:]
 	}
+	cwdLine := border + " " + truncate(dim.Render(cwd), contentW)
 
-	info := dim.Render(cwd)
+	// Line 2: branch (if available)
+	branchLine := ""
 	if s.gitBranch != "" {
-		info += " " + branchColor.Render("⎇ "+s.gitBranch)
+		branchLine = border + " " + truncate(white.Render(s.gitBranch), contentW)
 	}
 
-	verLine := border + " " + dim.Render("Trinity v"+version.String())
-	return sep + "\n" + border + " " + truncate(info, contentW) + "\n" + verLine
+	// Line 3: empty
+	emptyLine := border
+
+	// Line 4: ● Trinity 0.0.1
+	verLine := border + " " + green.Render("●") + " " + bold.Render("Trinity") + " " + dim.Render(version.String())
+
+	lines := sep + "\n" + cwdLine
+	if branchLine != "" {
+		lines += "\n" + branchLine
+	}
+	lines += "\n" + emptyLine + "\n" + verLine
+	return lines
 }
 
 func truncate(s string, maxWidth int) string {
