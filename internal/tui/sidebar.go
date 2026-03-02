@@ -445,10 +445,13 @@ func (s *Sidebar) RenderFixed() string {
 		gitLine = border + " " + truncate(strings.Join(parts, " "), contentW)
 	}
 
-	// Line 3: ● Trinity 0.0.1
+	// Line 3: empty
+	emptyLine := border
+
+	// Line 4: ● Trinity 0.0.1
 	verLine := border + " " + green.Render("●") + " " + bold.Render("Trinity") + " " + dim.Render(version.String())
 
-	return sep + "\n" + cwdLine + "\n" + gitLine + "\n" + verLine
+	return sep + "\n" + cwdLine + "\n" + gitLine + "\n" + emptyLine + "\n" + verLine
 }
 
 func truncate(s string, maxWidth int) string {

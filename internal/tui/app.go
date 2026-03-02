@@ -369,7 +369,14 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		a.width = msg.Width
 		a.height = msg.Height
-		a.input.SetWidth(a.width - 4)
+
+		sidebarW := a.sidebarWidth()
+		mainW := a.width - sidebarW
+		if mainW < 30 {
+			mainW = 30
+			sidebarW = a.width - mainW
+		}
+		a.input.SetWidth(mainW - 4)
 
 		indicatorH := 1
 		bottomBarH := 1
@@ -382,14 +389,8 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if chatH < 5 {
 			chatH = 5
 		}
-		sidebarW := a.sidebarWidth()
-		mainW := a.width - sidebarW
-		if mainW < 30 {
-			mainW = 30
-			sidebarW = a.width - mainW
-		}
-		sideFixedH := 4
-		sideVPH := chatH - sideFixedH
+		sideFixedH := 5 // sep + cwd + git + empty + version
+		sideVPH := a.height - sideFixedH
 		if sideVPH < 5 {
 			sideVPH = 5
 		}
@@ -1820,18 +1821,21 @@ func (a *App) View() string {
 		a.sidebar.sessionID = a.session.ID
 	}
 
-	// Sidebar: scrollable content + fixed bottom
-	sideFixedH := 4
-	sideVPH := chatH - sideFixedH
+	// Sidebar: full height (scrollable + fixed bottom)
+	sideFixedH := 5 // sep + cwd + git + empty + version
+	sideVPH := a.height - sideFixedH
 	if sideVPH < 5 {
 		sideVPH = 5
 	}
 	a.sideVP.Height = sideVPH
+	a.sidebar.height = a.height
 
 	sideContent := a.sidebar.RenderScrollable()
 	a.sideVP.SetContent(sideContent)
 	sideFixed := a.sidebar.RenderFixed()
+	sidePanel := a.sideVP.View() + "\n" + sideFixed
 
+	// Chat panel
 	var chatPanel string
 	if a.subagentView {
 		chatPanel = a.subagentVP.View()
@@ -1843,11 +1847,9 @@ func (a *App) View() string {
 			chatPanel = a.modal.OverlayOnPanel(chatPanel, mainW, chatH)
 		}
 	}
-	sidePanel := a.sideVP.View() + "\n" + sideFixed
 
-	topRow := lipgloss.JoinHorizontal(lipgloss.Top, chatPanel, sidePanel)
-
-	sep := dim.Render(strings.Repeat("─", a.width))
+	// Left bottom area (indicator + input + bottombar)
+	sep := dim.Render(strings.Repeat("─", mainW))
 
 	cmdHint := ""
 	if matches := a.matchingCommands(); len(matches) > 0 {
@@ -1882,7 +1884,6 @@ func (a *App) View() string {
 		indicator += "  " + copiedStyle.Render("[copied]")
 	}
 
-	// Choice bar (numbered choices from assistant)
 	choiceBar := ""
 	if len(a.choices) > 0 && !a.streaming && !a.classifying && a.orchPhase == orchIdle {
 		choiceKey := lipgloss.NewStyle().Foreground(lipgloss.Color("205")).Bold(true)
@@ -1894,13 +1895,14 @@ func (a *App) View() string {
 		choiceBar = strings.Join(parts, "  ") + "\n"
 	}
 
-	bottomBar := a.tabs.BottomBar(a.width)
+	bottomBar := a.tabs.BottomBar(mainW)
 
-	view := topRow + "\n" +
+	leftPanel := chatPanel + "\n" +
 		sep + "\n" +
 		indicator + "\n" +
 		choiceBar + cmdHint + inputLine + "\n" +
 		bottomBar
 
+	view := lipgloss.JoinHorizontal(lipgloss.Top, leftPanel, sidePanel)
 	return view
 }
