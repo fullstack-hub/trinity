@@ -1,0 +1,9 @@
+servers:
+  claude:
+    url: http://localhost:3100
+  gemini:
+    url: http://localhost:3200
+  copilot:
+    url: http://localhost:3300
+
+default_agent: claude
