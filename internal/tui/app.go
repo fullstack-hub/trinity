@@ -599,15 +599,25 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.historyIdx = -1
 			a.historySaved = ""
 
-			// Auto-complete slash commands: use arrow-selected or single match
+			// Auto-complete slash commands: if partial match, fill input and stop (don't execute)
 			if strings.HasPrefix(text, "/") {
 				matches := a.matchingCommands()
+				completed := ""
 				if a.slashIdx >= 0 && a.slashIdx < len(matches) {
-					text = matches[a.slashIdx].name
+					completed = matches[a.slashIdx].name
 				} else if len(matches) == 1 {
-					text = matches[0].name
+					completed = matches[0].name
 				}
 				a.slashIdx = -1
+				if completed != "" && completed != text {
+					// Only autocomplete — don't execute yet
+					a.input.SetValue(completed)
+					a.input.SetCursor(len(completed))
+					return a, nil
+				}
+				if completed != "" {
+					text = completed
+				}
 			}
 
 			if text == "/exit" || text == "/quit" {
