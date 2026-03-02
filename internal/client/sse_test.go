@@ -19,7 +19,7 @@ func TestChat_StreamsEvents(t *testing.T) {
 	defer server.Close()
 
 	c := New(server.URL)
-	ch, err := c.Chat(context.Background(), "test")
+	ch, err := c.Chat(context.Background(), "test", "", 0)
 	if err != nil {
 		t.Fatal(err)
 	}

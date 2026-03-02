@@ -15,4 +15,4 @@ servers:
     args: ["tsx", "server.ts"]
     dir: servers/copilot
 
-default_agent: claude
+default_agent: agent
