@@ -43,8 +43,8 @@ type Sidebar struct {
 	headerYs  []headerPos // populated during render for click detection
 
 	// Fixed bottom info
-	workDir   string
-	gitBranch string
+	workDir string
+	gitInfo gitStatus
 }
 
 func NewSidebar() *Sidebar {
@@ -394,11 +394,13 @@ func (s *Sidebar) RenderScrollable() string {
 	return strings.Join(rendered, "\n")
 }
 
-// RenderFixed returns the fixed bottom strip (cwd:branch + version).
+// RenderFixed returns the fixed bottom strip with p10k-style git info.
 func (s *Sidebar) RenderFixed() string {
 	dim := lipgloss.NewStyle().Foreground(lipgloss.Color("242"))
-	white := lipgloss.NewStyle().Foreground(lipgloss.Color("252"))
 	green := lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
+	yellow := lipgloss.NewStyle().Foreground(lipgloss.Color("220"))
+	red := lipgloss.NewStyle().Foreground(lipgloss.Color("203"))
+	cyan := lipgloss.NewStyle().Foreground(lipgloss.Color("117"))
 	bold := lipgloss.NewStyle().Foreground(lipgloss.Color("252")).Bold(true)
 	border := dim.Render("┃")
 	contentW := s.width - 3
@@ -406,10 +408,9 @@ func (s *Sidebar) RenderFixed() string {
 		contentW = 10
 	}
 
-	// Separator
 	sep := border + dim.Render(strings.Repeat("─", contentW+1))
 
-	// Line 1: cwd path (italic style via dim)
+	// Line 1: cwd
 	cwd := s.workDir
 	maxCwd := contentW - 2
 	if maxCwd < 10 {
@@ -420,24 +421,34 @@ func (s *Sidebar) RenderFixed() string {
 	}
 	cwdLine := border + " " + truncate(dim.Render(cwd), contentW)
 
-	// Line 2: branch (if available)
-	branchLine := ""
-	if s.gitBranch != "" {
-		branchLine = border + " " + truncate(white.Render(s.gitBranch), contentW)
+	// Line 2: p10k-style git status
+	gi := s.gitInfo
+	gitLine := border
+	if gi.Branch != "" {
+		var parts []string
+		parts = append(parts, green.Render("")+" "+green.Render(gi.Branch))
+		if gi.Ahead > 0 {
+			parts = append(parts, cyan.Render(fmt.Sprintf("⇡%d", gi.Ahead)))
+		}
+		if gi.Behind > 0 {
+			parts = append(parts, cyan.Render(fmt.Sprintf("⇣%d", gi.Behind)))
+		}
+		if gi.Staged > 0 {
+			parts = append(parts, green.Render(fmt.Sprintf("+%d", gi.Staged)))
+		}
+		if gi.Unstaged > 0 {
+			parts = append(parts, red.Render(fmt.Sprintf("!%d", gi.Unstaged)))
+		}
+		if gi.Untracked > 0 {
+			parts = append(parts, yellow.Render(fmt.Sprintf("?%d", gi.Untracked)))
+		}
+		gitLine = border + " " + truncate(strings.Join(parts, " "), contentW)
 	}
 
-	// Line 3: empty
-	emptyLine := border
-
-	// Line 4: ● Trinity 0.0.1
+	// Line 3: ● Trinity 0.0.1
 	verLine := border + " " + green.Render("●") + " " + bold.Render("Trinity") + " " + dim.Render(version.String())
 
-	lines := sep + "\n" + cwdLine
-	if branchLine != "" {
-		lines += "\n" + branchLine
-	}
-	lines += "\n" + emptyLine + "\n" + verLine
-	return lines
+	return sep + "\n" + cwdLine + "\n" + gitLine + "\n" + verLine
 }
 
 func truncate(s string, maxWidth int) string {

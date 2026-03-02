@@ -128,7 +128,7 @@ type App struct {
 	slashIdx int // selected slash command index (-1 = none)
 
 	// Workspace info
-	gitBranch string
+	gitInfo gitStatus
 
 	// Session persistence
 	store     *session.Store
@@ -211,7 +211,7 @@ func NewApp(cfg *config.Config, store *session.Store, sess *session.Session, wor
 		store:      store,
 		session:    sess,
 		workspace:  workspace,
-		gitBranch:  getGitBranch(workspace),
+		gitInfo:    getGitStatus(workspace),
 		lspManager: lsp.NewManager(workspace),
 	}
 
@@ -388,7 +388,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			mainW = 30
 			sidebarW = a.width - mainW
 		}
-		sideFixedH := 5
+		sideFixedH := 4
 		sideVPH := chatH - sideFixedH
 		if sideVPH < 5 {
 			sideVPH = 5
@@ -1533,13 +1533,50 @@ func detectFilePaths(text, workspace string) []string {
 	return paths
 }
 
-func getGitBranch(workspace string) string {
-	cmd := exec.Command("git", "-C", workspace, "rev-parse", "--abbrev-ref", "HEAD")
+type gitStatus struct {
+	Branch    string
+	Ahead     int
+	Behind    int
+	Staged    int
+	Unstaged  int
+	Untracked int
+}
+
+func getGitStatus(workspace string) gitStatus {
+	var gs gitStatus
+
+	// Branch + ahead/behind
+	cmd := exec.Command("git", "-C", workspace, "status", "--porcelain=v2", "--branch")
 	out, err := cmd.Output()
 	if err != nil {
-		return ""
+		return gs
 	}
-	return strings.TrimSpace(string(out))
+
+	for _, line := range strings.Split(string(out), "\n") {
+		if strings.HasPrefix(line, "# branch.head ") {
+			gs.Branch = strings.TrimPrefix(line, "# branch.head ")
+		} else if strings.HasPrefix(line, "# branch.ab ") {
+			parts := strings.Fields(line)
+			if len(parts) >= 4 {
+				fmt.Sscanf(parts[2], "+%d", &gs.Ahead)
+				fmt.Sscanf(parts[3], "-%d", &gs.Behind)
+			}
+		} else if len(line) > 0 && line[0] == '1' || len(line) > 0 && line[0] == '2' {
+			// Changed entry: "1 XY ..." or "2 XY ..."
+			if len(line) >= 4 {
+				xy := line[2:4]
+				if xy[0] != '.' {
+					gs.Staged++
+				}
+				if xy[1] != '.' {
+					gs.Unstaged++
+				}
+			}
+		} else if strings.HasPrefix(line, "? ") {
+			gs.Untracked++
+		}
+	}
+	return gs
 }
 
 func shortenPath(path string) string {
@@ -1774,7 +1811,7 @@ func (a *App) View() string {
 	a.sidebar.orchPlan = a.orchPlan
 	a.sidebar.orchPhase = a.orchPhase
 	a.sidebar.workDir = shortenPath(a.workspace)
-	a.sidebar.gitBranch = a.gitBranch
+	a.sidebar.gitInfo = a.gitInfo
 	if a.lspManager != nil {
 		a.sidebar.lspStatus = a.lspManager.Status()
 		a.sidebar.spinnerFrame = a.spinnerFrame
@@ -1784,7 +1821,7 @@ func (a *App) View() string {
 	}
 
 	// Sidebar: scrollable content + fixed bottom
-	sideFixedH := 5
+	sideFixedH := 4
 	sideVPH := chatH - sideFixedH
 	if sideVPH < 5 {
 		sideVPH = 5
