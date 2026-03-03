@@ -1787,15 +1787,7 @@ func (a *App) agentIndicator() string {
 		}
 	}
 
-	// Mode description
-	var modeDesc string
-	if key == "agent" {
-		modeDesc = dim.Render(" · ") + dim.Render("auto-routes to best model")
-	} else {
-		modeDesc = dim.Render(" · ") + dim.Render("using selected model directly")
-	}
-
-	return spaceBg.Render(" ") + tabDisplay + spaceBg.Render("  ") + modelDisplay + spaceBg.Render("  ") + providerDisplay + variantPart + modeDesc
+	return spaceBg.Render(" ") + tabDisplay + spaceBg.Render("  ") + modelDisplay + spaceBg.Render("  ") + providerDisplay + variantPart
 }
 
 // renderMessages renders the unified chat history.

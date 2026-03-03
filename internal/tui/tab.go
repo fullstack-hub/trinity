@@ -167,23 +167,34 @@ func (t TabBar) HasThinking() bool {
 	return len(t.thinkLevels()) > 0
 }
 
-// BottomBar renders the unified bottom bar: tabs + models + thinking + shortcuts.
+// BottomBar renders the unified bottom bar: mode description (left) + shortcuts (right).
 func (t TabBar) BottomBar(width int) string {
 	dim := lipgloss.NewStyle().Foreground(lipgloss.Color("242"))
 	key := lipgloss.NewStyle().Foreground(lipgloss.Color("252")).Bold(true)
 
+	// Left: mode description
+	var modeDesc string
+	activeKey := t.Keys[t.ActiveTab]
+	if activeKey == "agent" {
+		modeDesc = dim.Render(" auto-routes to the best model for each task")
+	} else {
+		modeDesc = dim.Render(" sends directly to the selected model")
+	}
+
+	// Right: keyboard shortcuts
 	right := key.Render("shift+\u23ce") + dim.Render(" newline  ") +
 		key.Render("ctrl+t") + dim.Render(" variants  ") +
 		key.Render("tab") + dim.Render(" mode  ") +
 		key.Render("ctrl+p") + dim.Render(" commands")
 
+	leftW := lipgloss.Width(modeDesc)
 	rightW := lipgloss.Width(right)
-	gap := width - rightW
+	gap := width - leftW - rightW
 	if gap < 0 {
 		gap = 0
 	}
 
-	return strings.Repeat(" ", gap) + right
+	return modeDesc + strings.Repeat(" ", gap) + right
 }
 
 // providerName maps server key to display provider name.
