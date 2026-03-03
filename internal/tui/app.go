@@ -154,7 +154,7 @@ func NewApp(cfg *config.Config, store *session.Store, sess *session.Session, wor
 	ta := textarea.New()
 	ta.Placeholder = "Send a message..."
 	ta.Prompt = "┃ "
-	ta.FocusedStyle.Prompt = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
+	ta.FocusedStyle.Prompt = lipgloss.NewStyle().Foreground(lipgloss.Color("14"))
 	ta.BlurredStyle.Prompt = lipgloss.NewStyle().Foreground(lipgloss.Color("242"))
 	ta.FocusedStyle.CursorLine = lipgloss.NewStyle()
 	ta.Focus()
@@ -495,6 +495,12 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "ctrl+t":
 			if !a.streaming && !a.classifying && a.orchPhase == orchIdle {
 				a.tabs.CycleThinking()
+			}
+			return a, nil
+		case "ctrl+p":
+			if !a.streaming && !a.classifying && a.orchPhase == orchIdle {
+				a.input.SetValue("/")
+				a.input.CursorEnd()
 			}
 			return a, nil
 		case "ctrl+y":
@@ -1624,42 +1630,43 @@ func (a *App) modelLabel(m *chatMessage) string {
 	return "[" + name + "]"
 }
 
-// agentIndicator renders the agent/mode indicator bar.
+// agentIndicator renders the status line below the input: TabName  Model  Provider · Variant
 func (a *App) agentIndicator() string {
 	key := a.activeKey()
+
+	// Colors matching the reference UI
+	cyan := lipgloss.NewStyle().Foreground(lipgloss.Color("14"))
+	white := lipgloss.NewStyle().Foreground(lipgloss.Color("252"))
 	dim := lipgloss.NewStyle().Foreground(lipgloss.Color("242"))
+	yellow := lipgloss.NewStyle().Foreground(lipgloss.Color("220"))
 
-	sessionInfo := ""
-	if a.session != nil {
-		sessionInfo = dim.Render("  [" + a.session.ID + "]")
-	}
-
+	// Tab name
+	var tabDisplay string
 	if key == "agent" {
-		agentColor := lipgloss.NewStyle().Foreground(lipgloss.Color("205")).Bold(true)
-		modelName := a.tabs.SelectedModelName()
-
-		status := "ready"
-		if a.classifying {
-			status = "classifying..."
-		} else if a.orchPhase == orchRunning {
-			done := countDone(a.orchPlan)
-			total := len(a.orchPlan.Tasks)
-			status = fmt.Sprintf("orchestrating (%d/%d)", done, total)
-		} else if a.orchPhase == orchSynthesizing {
-			status = "synthesizing..."
-		} else if a.streaming {
-			status = "streaming"
-		}
-
-		return agentColor.Render("■ Agent") + dim.Render(" · "+modelName) +
-			"  " + dim.Render(status) + sessionInfo
+		tabDisplay = cyan.Bold(true).Render("Agent")
+	} else {
+		tabDisplay = cyan.Bold(true).Render("Direct")
 	}
 
-	// Direct mode
-	directColor := lipgloss.NewStyle().Foreground(lipgloss.Color("117")).Bold(true)
-	modelName := a.tabs.SelectedModelName()
+	// Model name (with brand prefix)
 	server := a.tabs.SelectedServer()
-	return directColor.Render("■ Direct") + dim.Render(" · "+modelName+" ("+server+")") + sessionInfo
+	modelDisplay := white.Render(fullModelName(server, a.tabs.SelectedModelName()))
+
+	// Provider
+	providerDisplay := dim.Render(providerName(server))
+
+	// Variant (thinking level)
+	var variantPart string
+	if a.tabs.HasThinking() {
+		thinkName := a.tabs.ThinkingName()
+		if a.tabs.ThinkingBudget() > 0 {
+			variantPart = dim.Render(" · ") + yellow.Render(thinkName)
+		} else {
+			variantPart = dim.Render(" · ") + dim.Render(thinkName)
+		}
+	}
+
+	return " " + tabDisplay + "  " + modelDisplay + "  " + providerDisplay + variantPart
 }
 
 // renderMessages renders the unified chat history.
@@ -1848,8 +1855,8 @@ func (a *App) View() string {
 		}
 	}
 
-	// Left bottom area (indicator + input + bottombar)
-	sep := dim.Render(strings.Repeat("─", mainW))
+	// Left bottom area (input + status + accent + shortcuts)
+	accentLine := lipgloss.NewStyle().Foreground(lipgloss.Color("14")).Render(strings.Repeat("\u2500", mainW))
 
 	cmdHint := ""
 	if matches := a.matchingCommands(); len(matches) > 0 {
@@ -1876,8 +1883,8 @@ func (a *App) View() string {
 	indicator := a.agentIndicator()
 	if a.subagentView {
 		subLabel := lipgloss.NewStyle().Foreground(lipgloss.Color("220")).Bold(true)
-		indicator = subLabel.Render("■ Subagent Detail") + "  " + dim.Render(a.subagentTaskID) +
-			"  " + dim.Render("← → switch  esc back")
+		indicator = subLabel.Render("\u25a0 Subagent Detail") + "  " + dim.Render(a.subagentTaskID) +
+			"  " + dim.Render("\u2190 \u2192 switch  esc back")
 	}
 	if a.copiedTimer > 0 {
 		copiedStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("42")).Bold(true)
@@ -1898,9 +1905,9 @@ func (a *App) View() string {
 	bottomBar := a.tabs.BottomBar(mainW)
 
 	leftPanel := chatPanel + "\n" +
-		sep + "\n" +
-		indicator + "\n" +
 		choiceBar + cmdHint + inputLine + "\n" +
+		indicator + "\n" +
+		accentLine + "\n" +
 		bottomBar
 
 	view := lipgloss.JoinHorizontal(lipgloss.Top, leftPanel, sidePanel)

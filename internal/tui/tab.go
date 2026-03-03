@@ -171,70 +171,47 @@ func (t TabBar) HasThinking() bool {
 func (t TabBar) BottomBar(width int) string {
 	bg := lipgloss.Color("236")
 	dim := lipgloss.NewStyle().Foreground(lipgloss.Color("242")).Background(bg)
-	active := lipgloss.NewStyle().Foreground(lipgloss.Color("205")).Bold(true).Background(bg)
-	inactive := lipgloss.NewStyle().Foreground(lipgloss.Color("240")).Background(bg)
 	key := lipgloss.NewStyle().Foreground(lipgloss.Color("252")).Bold(true).Background(bg)
 	pad := lipgloss.NewStyle().Background(bg)
-	activeMdl := lipgloss.NewStyle().Foreground(lipgloss.Color("117")).Bold(true).Background(bg)
-	inactiveMdl := lipgloss.NewStyle().Foreground(lipgloss.Color("242")).Background(bg)
-	thinkDim := lipgloss.NewStyle().Foreground(lipgloss.Color("242")).Background(bg)
-	thinkOn := lipgloss.NewStyle().Foreground(lipgloss.Color("220")).Bold(true).Background(bg)
-	thinkOff := lipgloss.NewStyle().Foreground(lipgloss.Color("240")).Background(bg)
-	thinkNA := lipgloss.NewStyle().Foreground(lipgloss.Color("238")).Background(bg)
 
-	// Left side: tabs
-	var tabs []string
-	for i, tab := range t.Tabs {
-		if i == t.ActiveTab {
-			tabs = append(tabs, active.Render(tab))
-		} else {
-			tabs = append(tabs, inactive.Render(tab))
-		}
-	}
-	left := dim.Render("  ") + strings.Join(tabs, dim.Render(" · "))
+	right := key.Render("ctrl+t") + dim.Render(" variants  ") +
+		key.Render("tab") + dim.Render(" agents  ") +
+		key.Render("ctrl+p") + dim.Render(" commands")
 
-	// Center: model selection
-	tabKey := t.Keys[t.ActiveTab]
-	models := agentModels[tabKey]
-	if len(models) > 0 {
-		selected := t.ActiveModels[tabKey]
-		var parts []string
-		for i, m := range models {
-			if i == selected {
-				parts = append(parts, activeMdl.Render("►"+m.Name))
-			} else {
-				parts = append(parts, inactiveMdl.Render(" "+m.Name))
-			}
-		}
-		left += dim.Render("    ") + strings.Join(parts, dim.Render(" "))
-	}
-
-	// Thinking indicator
-	var thinkPart string
-	if t.HasThinking() {
-		thinkName := t.ThinkingName()
-		if t.ThinkingBudget() > 0 {
-			thinkPart = thinkDim.Render("thinking ") + thinkOn.Render(thinkName)
-		} else {
-			thinkPart = thinkDim.Render("thinking ") + thinkOff.Render(thinkName)
-		}
-	} else {
-		thinkPart = thinkNA.Render("thinking n/a")
-	}
-
-	// Right side: keyboard shortcuts
-	right := thinkPart + dim.Render("  ") +
-		key.Render("tab") + dim.Render(" switch  ") +
-		key.Render("⇧tab") + dim.Render(" model  ") +
-		key.Render("ctrl+t") + dim.Render(" think  ") +
-		key.Render("ctrl+c") + dim.Render(" quit")
-
-	leftW := lipgloss.Width(left)
 	rightW := lipgloss.Width(right)
-	gap := width - leftW - rightW
-	if gap < 2 {
-		gap = 2
+	gap := width - rightW
+	if gap < 0 {
+		gap = 0
 	}
 
-	return left + pad.Render(strings.Repeat(" ", gap)) + right
+	return pad.Render(strings.Repeat(" ", gap)) + right
+}
+
+// providerName maps server key to display provider name.
+func providerName(server string) string {
+	switch server {
+	case "claude":
+		return "Anthropic"
+	case "gemini":
+		return "Google"
+	case "copilot":
+		return "OpenAI"
+	default:
+		return server
+	}
+}
+
+// fullModelName prepends the brand prefix to the model display name.
+func fullModelName(server, name string) string {
+	switch server {
+	case "claude":
+		if !strings.HasPrefix(name, "Claude") {
+			return "Claude " + name
+		}
+	case "gemini":
+		if !strings.HasPrefix(name, "Gemini") {
+			return "Gemini " + name
+		}
+	}
+	return name
 }
