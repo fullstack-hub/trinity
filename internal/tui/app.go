@@ -235,7 +235,7 @@ func NewApp(cfg *config.Config, store *session.Store, sess *session.Session, wor
 	ta.KeyMap.InsertNewline.SetKeys("shift+enter")
 	ta.SetVirtualCursor(false) // real cursor for accurate CJK wide-char positioning
 
-	tabNames := []string{"Agent", "Direct"}
+	tabNames := []string{"Smart Router", "Direct"}
 	tabKeys := []string{"agent", "direct"}
 
 	// Build clients for real servers
@@ -1764,7 +1764,7 @@ func (a *App) agentIndicator() string {
 	// Tab name
 	var tabDisplay string
 	if key == "agent" {
-		tabDisplay = accentStyle.Bold(true).Render("Agent")
+		tabDisplay = accentStyle.Bold(true).Render("Smart Router")
 	} else {
 		tabDisplay = accentStyle.Bold(true).Render("Direct")
 	}
@@ -1787,7 +1787,15 @@ func (a *App) agentIndicator() string {
 		}
 	}
 
-	return spaceBg.Render(" ") + tabDisplay + spaceBg.Render("  ") + modelDisplay + spaceBg.Render("  ") + providerDisplay + variantPart
+	// Mode description
+	var modeDesc string
+	if key == "agent" {
+		modeDesc = dim.Render(" · ") + dim.Render("auto-routes to best model")
+	} else {
+		modeDesc = dim.Render(" · ") + dim.Render("using selected model directly")
+	}
+
+	return spaceBg.Render(" ") + tabDisplay + spaceBg.Render("  ") + modelDisplay + spaceBg.Render("  ") + providerDisplay + variantPart + modeDesc
 }
 
 // renderMessages renders the unified chat history.

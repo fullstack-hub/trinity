@@ -174,7 +174,7 @@ func (t TabBar) BottomBar(width int) string {
 
 	right := key.Render("shift+\u23ce") + dim.Render(" newline  ") +
 		key.Render("ctrl+t") + dim.Render(" variants  ") +
-		key.Render("tab") + dim.Render(" agents  ") +
+		key.Render("tab") + dim.Render(" mode  ") +
 		key.Render("ctrl+p") + dim.Render(" commands")
 
 	rightW := lipgloss.Width(right)
