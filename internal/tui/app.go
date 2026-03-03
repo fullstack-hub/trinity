@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"fmt"
+	"image/color"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -10,10 +11,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/charmbracelet/bubbles/textarea"
-	"github.com/charmbracelet/bubbles/viewport"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/textarea"
+	"charm.land/bubbles/v2/viewport"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/fullstack-hub/trinity/internal/client"
 	"github.com/fullstack-hub/trinity/internal/config"
 	"github.com/fullstack-hub/trinity/internal/lsp"
@@ -55,15 +56,75 @@ type spinnerTickMsg time.Time
 
 var spinnerFrames = []string{".  ", ".. ", "...", " ..", "  .", "   "}
 
-var banner = lipgloss.NewStyle().Foreground(lipgloss.Color("205")).Render(`
- ████████╗██████╗ ██╗███╗   ██╗██╗████████╗██╗   ██╗
- ╚══██╔══╝██╔══██╗██║████╗  ██║██║╚══██╔══╝╚██╗ ██╔╝
-    ██║   ██████╔╝██║██╔██╗ ██║██║   ██║    ╚████╔╝
-    ██║   ██╔══██╗██║██║╚██╗██║██║   ██║     ╚██╔╝
-    ██║   ██║  ██║██║██║ ╚████║██║   ██║      ██║
-    ╚═╝   ╚═╝  ╚═╝╚═╝╚═╝  ╚═══╝╚═╝   ╚═╝      ╚═╝`) +
-	"\n" + lipgloss.NewStyle().Foreground(lipgloss.Color("242")).Render(
-	"    Unified AI CLI — Claude · Gemini · Copilot")
+var banner = makeBanner()
+
+func makeBanner() string {
+	raw := []string{
+		" ████████╗██████╗ ██╗███╗   ██╗██╗████████╗██╗   ██╗",
+		" ╚══██╔══╝██╔══██╗██║████╗  ██║██║╚══██╔══╝╚██╗ ██╔╝",
+		"    ██║   ██████╔╝██║██╔██╗ ██║██║   ██║    ╚████╔╝ ",
+		"    ██║   ██╔══██╗██║██║╚██╗██║██║   ██║     ╚██╔╝  ",
+		"    ██║   ██║  ██║██║██║ ╚████║██║   ██║      ██║   ",
+		"    ╚═╝   ╚═╝  ╚═╝╚═╝╚═╝  ╚═══╝╚═╝   ╚═╝      ╚═╝   ",
+	}
+
+	// 3-color gradient: pink(205) → purple(99) → cyan(14)
+	colors := []color.Color{
+		lipgloss.Color("205"), lipgloss.Color("205"), lipgloss.Color("204"), lipgloss.Color("204"), lipgloss.Color("170"), lipgloss.Color("170"),
+		lipgloss.Color("135"), lipgloss.Color("135"), lipgloss.Color("99"), lipgloss.Color("99"), lipgloss.Color("63"), lipgloss.Color("63"),
+		lipgloss.Color("33"), lipgloss.Color("33"), lipgloss.Color("39"), lipgloss.Color("38"), lipgloss.Color("14"), lipgloss.Color("14"),
+	}
+
+	// Trinity symbol (6 lines, each colored differently)
+	pink := lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
+	purple := lipgloss.NewStyle().Foreground(lipgloss.Color("99"))
+	cyan := lipgloss.NewStyle().Foreground(lipgloss.Color("14"))
+	dimSym := lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
+	symbol := []string{
+		"          ",
+		"    " + pink.Render("◆") + "     ",
+		"   " + dimSym.Render("╱") + " " + dimSym.Render("╲") + "    ",
+		"  " + purple.Render("◆") + dimSym.Render("───") + cyan.Render("◆") + "   ",
+		"   " + dimSym.Render("╲") + " " + dimSym.Render("╱") + "    ",
+		"    " + dimSym.Render("◆") + "     ",
+	}
+
+	// Render gradient text + symbol side by side
+	var lines []string
+	for i, line := range raw {
+		grad := renderGradientLine(line, colors)
+		sym := ""
+		if i < len(symbol) {
+			sym = symbol[i]
+		}
+		lines = append(lines, grad+"  "+sym)
+	}
+
+	// Subtitle + powered by
+	dim := lipgloss.NewStyle().Foreground(lipgloss.Color("242"))
+	powered := lipgloss.NewStyle().Foreground(lipgloss.Color("238"))
+	lines = append(lines, dim.Render("    Unified AI CLI — Claude · Gemini · Copilot"))
+	lines = append(lines, powered.Render("              Powered by fullstackhub"))
+
+	return strings.Join(lines, "\n")
+}
+
+func renderGradientLine(line string, colors []color.Color) string {
+	runes := []rune(line)
+	n := len(runes)
+	if n == 0 || len(colors) == 0 {
+		return line
+	}
+	var sb strings.Builder
+	for i, r := range runes {
+		idx := i * (len(colors) - 1) / max(n-1, 1)
+		if idx >= len(colors) {
+			idx = len(colors) - 1
+		}
+		sb.WriteString(lipgloss.NewStyle().Foreground(colors[idx]).Render(string(r)))
+	}
+	return sb.String()
+}
 
 type slashCmd struct {
 	name string
@@ -152,16 +213,27 @@ type App struct {
 
 func NewApp(cfg *config.Config, store *session.Store, sess *session.Session, workspace string) *App {
 	ta := textarea.New()
-	ta.Placeholder = "Send a message..."
+	ta.Placeholder = ""
 	ta.Prompt = "┃ "
-	ta.FocusedStyle.Prompt = lipgloss.NewStyle().Foreground(lipgloss.Color("14"))
-	ta.BlurredStyle.Prompt = lipgloss.NewStyle().Foreground(lipgloss.Color("242"))
-	ta.FocusedStyle.CursorLine = lipgloss.NewStyle()
+	inputBg := lipgloss.Color("236")
+	styles := textarea.DefaultDarkStyles()
+	styles.Focused.Prompt = lipgloss.NewStyle().Foreground(lipgloss.Color("14")).Background(inputBg)
+	styles.Focused.Base = lipgloss.NewStyle().Background(inputBg)
+	styles.Focused.CursorLine = lipgloss.NewStyle().Background(inputBg)
+	styles.Focused.Text = lipgloss.NewStyle().Background(inputBg)
+	styles.Focused.Placeholder = lipgloss.NewStyle().Foreground(lipgloss.Color("242")).Background(inputBg)
+	styles.Focused.EndOfBuffer = lipgloss.NewStyle().Foreground(inputBg).Background(inputBg)
+	styles.Blurred.Prompt = lipgloss.NewStyle().Foreground(lipgloss.Color("242")).Background(inputBg)
+	styles.Blurred.Base = lipgloss.NewStyle().Background(inputBg)
+	ta.SetStyles(styles)
 	ta.Focus()
 	ta.SetHeight(1)
 	ta.SetWidth(80)
 	ta.ShowLineNumbers = false
 	ta.CharLimit = 0
+	// Enter → send message (handled in Update switch), Alt+Enter → newline
+	ta.KeyMap.InsertNewline.SetKeys("shift+enter")
+	ta.SetVirtualCursor(false) // real cursor for accurate CJK wide-char positioning
 
 	tabNames := []string{"Agent", "Direct"}
 	tabKeys := []string{"agent", "direct"}
@@ -182,11 +254,11 @@ func NewApp(cfg *config.Config, store *session.Store, sess *session.Session, wor
 		}
 	}
 
-	chatVP := viewport.New(80, 20)
+	chatVP := viewport.New(viewport.WithWidth(80), viewport.WithHeight(20))
 	chatVP.MouseWheelEnabled = true
-	sideVP := viewport.New(28, 20)
+	sideVP := viewport.New(viewport.WithWidth(28), viewport.WithHeight(20))
 	sideVP.MouseWheelEnabled = true
-	subVP := viewport.New(80, 20)
+	subVP := viewport.New(viewport.WithWidth(80), viewport.WithHeight(20))
 	subVP.MouseWheelEnabled = true
 
 	// Create or restore session
@@ -248,7 +320,7 @@ func (a *App) activeKey() string {
 type quotaFetchedMsg struct{}
 
 func (a *App) Init() tea.Cmd {
-	return tea.Batch(textarea.Blink, a.checkHealth(), a.healthTick(), a.fetchQuotas(), tea.EnableMouseCellMotion, a.spinnerTick())
+	return tea.Batch(a.checkHealth(), a.healthTick(), a.fetchQuotas(), a.spinnerTick())
 }
 
 func (a *App) fetchQuotas() tea.Cmd {
@@ -378,14 +450,21 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		a.input.SetWidth(mainW - 4)
 
+		contentLines := strings.Count(a.input.Value(), "\n") + 1
+		taHeight := max(1, min(contentLines, 10))
+		a.input.SetHeight(taHeight)
 		indicatorH := 1
 		bottomBarH := 1
-		inputH := 3
+		inputH := taHeight + 2
 		choiceBarH := 0
 		if len(a.choices) > 0 && !a.streaming && !a.classifying && a.orchPhase == orchIdle {
 			choiceBarH = 1
 		}
-		chatH := a.height - inputH - bottomBarH - indicatorH - choiceBarH
+		cmdHintH := 0
+		if matches := a.matchingCommands(); len(matches) > 0 {
+			cmdHintH = len(matches)
+		}
+		chatH := a.height - inputH - bottomBarH - indicatorH - choiceBarH - cmdHintH
 		if chatH < 5 {
 			chatH = 5
 		}
@@ -394,61 +473,84 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if sideVPH < 5 {
 			sideVPH = 5
 		}
-		a.chatVP.Width = mainW
-		a.chatVP.Height = chatH
-		a.sideVP.Width = sidebarW
-		a.sideVP.Height = sideVPH
-		a.subagentVP.Width = mainW
-		a.subagentVP.Height = chatH
+		a.chatVP.SetWidth(mainW)
+		a.chatVP.SetHeight(chatH)
+		a.sideVP.SetWidth(sidebarW)
+		a.sideVP.SetHeight(sideVPH)
+		a.subagentVP.SetWidth(mainW)
+		a.subagentVP.SetHeight(chatH)
 		return a, nil
 
-	case tea.MouseMsg:
+	case tea.MouseClickMsg:
+		m := tea.Mouse(msg)
 		sidebarW := a.sidebarWidth()
 		mainW := a.width - sidebarW
 		if mainW < 30 {
 			mainW = 30
 		}
-
-		event := tea.MouseEvent(msg)
-
 		// Modal: only clicking "esc" button closes modal
 		if a.modal.visible {
-			if event.Action == tea.MouseActionRelease && event.Button == tea.MouseButtonLeft {
-				if a.modal.HitEsc(msg.X, msg.Y) {
-					a.modal.Close()
-				}
+			if a.modal.HitEsc(m.X, m.Y) {
+				a.modal.Close()
 			}
 			return a, nil
 		}
-
-		// Wheel events → pass to viewport for scrolling
-		if event.IsWheel() {
-			if msg.X < mainW {
-				if a.subagentView {
-					var cmd tea.Cmd
-					a.subagentVP, cmd = a.subagentVP.Update(msg)
-					return a, cmd
-				}
-				var cmd tea.Cmd
-				a.chatVP, cmd = a.chatVP.Update(msg)
-				return a, cmd
-			}
-			var cmd tea.Cmd
-			a.sideVP, cmd = a.sideVP.Update(msg)
-			return a, cmd
-		}
-
 		// Sidebar section click → toggle collapse
-		if msg.X >= mainW && event.Action == tea.MouseActionRelease && event.Button == tea.MouseButtonLeft {
-			contentY := msg.Y + a.sideVP.YOffset
+		if m.X >= mainW {
+			contentY := m.Y + a.sideVP.YOffset()
 			if section := a.sidebar.HitSection(contentY); section != "" {
 				a.sidebar.ToggleSection(section)
 			}
 		}
-
 		return a, nil
 
-	case tea.KeyMsg:
+	case tea.MouseReleaseMsg:
+		m := tea.Mouse(msg)
+		sidebarW := a.sidebarWidth()
+		mainW := a.width - sidebarW
+		if mainW < 30 {
+			mainW = 30
+		}
+		if a.modal.visible {
+			if a.modal.HitEsc(m.X, m.Y) {
+				a.modal.Close()
+			}
+			return a, nil
+		}
+		// Sidebar section click → toggle collapse
+		if m.X >= mainW {
+			contentY := m.Y + a.sideVP.YOffset()
+			if section := a.sidebar.HitSection(contentY); section != "" {
+				a.sidebar.ToggleSection(section)
+			}
+		}
+		return a, nil
+
+	case tea.MouseWheelMsg:
+		m := tea.Mouse(msg)
+		sidebarW := a.sidebarWidth()
+		mainW := a.width - sidebarW
+		if mainW < 30 {
+			mainW = 30
+		}
+		if a.modal.visible {
+			return a, nil
+		}
+		if m.X < mainW {
+			if a.subagentView {
+				var cmd tea.Cmd
+				a.subagentVP, cmd = a.subagentVP.Update(msg)
+				return a, cmd
+			}
+			var cmd tea.Cmd
+			a.chatVP, cmd = a.chatVP.Update(msg)
+			return a, cmd
+		}
+		var cmd tea.Cmd
+		a.sideVP, cmd = a.sideVP.Update(msg)
+		return a, cmd
+
+	case tea.KeyPressMsg:
 		// Modal intercepts all keys when visible
 		if a.modal.visible {
 			return a.handleModalKey(msg)
@@ -461,10 +563,10 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		switch msg.String() {
 		case "pgup":
-			a.chatVP.LineUp(10)
+			a.chatVP.ScrollUp(10)
 			return a, nil
 		case "pgdown":
-			a.chatVP.LineDown(10)
+			a.chatVP.ScrollDown(10)
 			return a, nil
 		case "ctrl+c":
 			// Save session before exit
@@ -514,7 +616,12 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return a, nil
 		case "esc":
-			// esc does nothing in main view (only used in modal/subagent view)
+			// Dismiss slash command menu if open
+			if matches := a.matchingCommands(); len(matches) > 0 {
+				a.input.Reset()
+				a.slashIdx = -1
+				return a, nil
+			}
 			return a, nil
 		case "ctrl+d":
 			// Enter subagent detail view during orchestration
@@ -619,7 +726,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if completed != "" && completed != text {
 					// Only autocomplete — don't execute yet
 					a.input.SetValue(completed)
-					a.input.SetCursor(len(completed))
+					a.input.SetCursorColumn(len(completed))
 					return a, nil
 				}
 				if completed != "" {
@@ -826,8 +933,11 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	var cmd tea.Cmd
+	oldVal := a.input.Value()
 	a.input, cmd = a.input.Update(msg)
-	a.slashIdx = -1 // reset slash selection on input change
+	if a.input.Value() != oldVal {
+		a.slashIdx = -1 // reset slash selection only on actual input change
+	}
 	return a, cmd
 }
 
@@ -962,7 +1072,7 @@ func (a *App) handleSessionSwitch(id string) tea.Cmd {
 	return a.resetServers()
 }
 
-func (a *App) handleModalKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (a *App) handleModalKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	keyStr := msg.String()
 
 	// Rename mode
@@ -1208,7 +1318,7 @@ func (a *App) handleOrchEvent(msg orchEventMsg) tea.Cmd {
 
 // ── Subagent detail view ──
 
-func (a *App) handleSubagentKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (a *App) handleSubagentKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc", "q":
 		a.subagentView = false
@@ -1220,10 +1330,10 @@ func (a *App) handleSubagentKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		a.cycleSubagentTask(1)
 		return a, nil
 	case "pgup":
-		a.subagentVP.LineUp(10)
+		a.subagentVP.ScrollUp(10)
 		return a, nil
 	case "pgdown":
-		a.subagentVP.LineDown(10)
+		a.subagentVP.ScrollDown(10)
 		return a, nil
 	case "ctrl+c":
 		a.saveSession()
@@ -1630,22 +1740,33 @@ func (a *App) modelLabel(m *chatMessage) string {
 	return "[" + name + "]"
 }
 
+// accentColor returns the mode-specific accent color: cyan for Agent, pink for Direct.
+func (a *App) accentColor() color.Color {
+	if a.activeKey() == "agent" {
+		return lipgloss.Color("14") // cyan
+	}
+	return lipgloss.Color("205") // pink
+}
+
 // agentIndicator renders the status line below the input: TabName  Model  Provider · Variant
 func (a *App) agentIndicator() string {
 	key := a.activeKey()
+	inputBg := lipgloss.Color("236")
+	accent := a.accentColor()
 
-	// Colors matching the reference UI
-	cyan := lipgloss.NewStyle().Foreground(lipgloss.Color("14"))
-	white := lipgloss.NewStyle().Foreground(lipgloss.Color("252"))
-	dim := lipgloss.NewStyle().Foreground(lipgloss.Color("242"))
-	yellow := lipgloss.NewStyle().Foreground(lipgloss.Color("220"))
+	// All styles include inputBg background for consistent box appearance
+	accentStyle := lipgloss.NewStyle().Foreground(accent).Background(inputBg)
+	white := lipgloss.NewStyle().Foreground(lipgloss.Color("252")).Background(inputBg)
+	dim := lipgloss.NewStyle().Foreground(lipgloss.Color("242")).Background(inputBg)
+	yellow := lipgloss.NewStyle().Foreground(lipgloss.Color("220")).Background(inputBg)
+	spaceBg := lipgloss.NewStyle().Background(inputBg)
 
 	// Tab name
 	var tabDisplay string
 	if key == "agent" {
-		tabDisplay = cyan.Bold(true).Render("Agent")
+		tabDisplay = accentStyle.Bold(true).Render("Agent")
 	} else {
-		tabDisplay = cyan.Bold(true).Render("Direct")
+		tabDisplay = accentStyle.Bold(true).Render("Direct")
 	}
 
 	// Model name (with brand prefix)
@@ -1666,7 +1787,7 @@ func (a *App) agentIndicator() string {
 		}
 	}
 
-	return " " + tabDisplay + "  " + modelDisplay + "  " + providerDisplay + variantPart
+	return spaceBg.Render(" ") + tabDisplay + spaceBg.Render("  ") + modelDisplay + spaceBg.Render("  ") + providerDisplay + variantPart
 }
 
 // renderMessages renders the unified chat history.
@@ -1746,24 +1867,32 @@ func (a *App) renderMessages(width int) string {
 	return strings.Join(sections, "\n\n")
 }
 
-func (a *App) View() string {
+func (a *App) View() tea.View {
 	if a.width == 0 || a.height == 0 {
-		return ""
+		return tea.View{}
 	}
 
 	dim := lipgloss.NewStyle().Foreground(lipgloss.Color("242"))
 
 	indicatorH := 1
 	bottomBarH := 1
-	inputH := 3
+	contentLines := strings.Count(a.input.Value(), "\n") + 1
+	taHeight := max(1, min(contentLines, 10))
+	a.input.SetHeight(taHeight)
+	inputH := taHeight + 3 // textarea + statusLine + accentLine + separators
 	choiceBarH := 0
 	if len(a.choices) > 0 && !a.streaming && !a.classifying && a.orchPhase == orchIdle {
 		choiceBarH = 1
 	}
-	chatH := a.height - inputH - bottomBarH - indicatorH - choiceBarH
+	cmdHintH := 0
+	if matches := a.matchingCommands(); len(matches) > 0 {
+		cmdHintH = len(matches)
+	}
+	chatH := a.height - inputH - bottomBarH - indicatorH - choiceBarH - cmdHintH
 	if chatH < 5 {
 		chatH = 5
 	}
+	a.chatVP.SetHeight(chatH)
 
 	sidebarW := a.sidebarWidth()
 	mainW := a.width - sidebarW
@@ -1834,7 +1963,7 @@ func (a *App) View() string {
 	if sideVPH < 5 {
 		sideVPH = 5
 	}
-	a.sideVP.Height = sideVPH
+	a.sideVP.SetHeight(sideVPH)
 	a.sidebar.height = a.height
 
 	sideContent := a.sidebar.RenderScrollable()
@@ -1855,31 +1984,30 @@ func (a *App) View() string {
 		}
 	}
 
-	// Left bottom area (input + status + accent + shortcuts)
-	accentLine := lipgloss.NewStyle().Foreground(lipgloss.Color("14")).Render(strings.Repeat("\u2500", mainW))
+	// Left bottom area (input box + accent + shortcuts)
+	accent := a.accentColor()
+	accentLine := lipgloss.NewStyle().Foreground(accent).Render(strings.Repeat("\u2500", mainW))
 
 	cmdHint := ""
 	if matches := a.matchingCommands(); len(matches) > 0 {
-		cmdStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("99")).Bold(true)
-		selCmdStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("205")).Bold(true).Background(lipgloss.Color("236"))
-		descStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("242"))
-		selDescStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("252")).Background(lipgloss.Color("236"))
-		var lines []string
-		for i, m := range matches {
-			if i == a.slashIdx {
-				lines = append(lines, fmt.Sprintf("  %s  %s",
-					selCmdStyle.Render(fmt.Sprintf("%-12s", m.name)),
-					selDescStyle.Render(m.desc)))
-			} else {
-				lines = append(lines, fmt.Sprintf("  %s  %s",
-					cmdStyle.Render(fmt.Sprintf("%-12s", m.name)),
-					descStyle.Render(m.desc)))
-			}
+		// Placeholder lines for layout height; real rendering overlaid full-width after JoinHorizontal
+		placeholders := make([]string, len(matches))
+		for i := range placeholders {
+			placeholders[i] = strings.Repeat(" ", mainW)
 		}
-		cmdHint = strings.Join(lines, "\n") + "\n"
+		cmdHint = strings.Join(placeholders, "\n") + "\n"
 	}
 
-	inputLine := a.input.View()
+	// Build input box: textarea + status line, all with background
+	inputBg := lipgloss.Color("236")
+	bgStyle := lipgloss.NewStyle().Background(inputBg)
+	barStyle := lipgloss.NewStyle().Foreground(accent).Background(inputBg)
+
+	// Update textarea prompt color to match current mode
+	curStyles := a.input.Styles()
+	curStyles.Focused.Prompt = lipgloss.NewStyle().Foreground(accent).Background(inputBg)
+	a.input.SetStyles(curStyles)
+	inputView := a.input.View()
 	indicator := a.agentIndicator()
 	if a.subagentView {
 		subLabel := lipgloss.NewStyle().Foreground(lipgloss.Color("220")).Bold(true)
@@ -1890,6 +2018,30 @@ func (a *App) View() string {
 		copiedStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("42")).Bold(true)
 		indicator += "  " + copiedStyle.Render("[copied]")
 	}
+
+	// Pad each textarea line to full width with background
+	padLine := func(line string, w int) string {
+		lw := lipgloss.Width(line)
+		if lw < w {
+			return line + bgStyle.Render(strings.Repeat(" ", w-lw))
+		}
+		return line
+	}
+
+	inputLines := strings.Split(inputView, "\n")
+	// Ensure minimum 2 visible lines for consistent box height
+	for len(inputLines) < 2 {
+		inputLines = append(inputLines, barStyle.Render("\u2503")+bgStyle.Render(" "))
+	}
+	var boxLines []string
+	for _, line := range inputLines {
+		boxLines = append(boxLines, padLine(line, mainW))
+	}
+	inputBox := strings.Join(boxLines, "\n")
+
+	// Status line OUTSIDE the box (fixed position)
+	statusLine := barStyle.Render("\u2503") + bgStyle.Render(indicator)
+	statusLine = padLine(statusLine, mainW)
 
 	choiceBar := ""
 	if len(a.choices) > 0 && !a.streaming && !a.classifying && a.orchPhase == orchIdle {
@@ -1905,11 +2057,64 @@ func (a *App) View() string {
 	bottomBar := a.tabs.BottomBar(mainW)
 
 	leftPanel := chatPanel + "\n" +
-		choiceBar + cmdHint + inputLine + "\n" +
-		indicator + "\n" +
+		choiceBar + cmdHint + inputBox + "\n" +
+		statusLine + "\n" +
 		accentLine + "\n" +
 		bottomBar
 
 	view := lipgloss.JoinHorizontal(lipgloss.Top, leftPanel, sidePanel)
-	return view
+
+	// Overlay full-width slash command menu on top of combined view
+	if matches := a.matchingCommands(); len(matches) > 0 {
+		viewLines := strings.Split(view, "\n")
+		selBg := lipgloss.Color("236")
+		for i, m := range matches {
+			pos := chatH + choiceBarH + i
+			if pos >= len(viewLines) {
+				break
+			}
+			var line string
+			if i == a.slashIdx {
+				cmdPart := lipgloss.NewStyle().Foreground(lipgloss.Color("205")).Bold(true).Background(selBg).
+					Render(fmt.Sprintf("  %-14s", m.name))
+				descPart := lipgloss.NewStyle().Foreground(lipgloss.Color("252")).Background(selBg).
+					Render(" " + m.desc)
+				line = cmdPart + descPart
+				w := lipgloss.Width(line)
+				if w < a.width {
+					line += lipgloss.NewStyle().Background(selBg).Render(strings.Repeat(" ", a.width-w))
+				}
+			} else {
+				cmdPart := lipgloss.NewStyle().Foreground(lipgloss.Color("99")).Bold(true).
+					Render(fmt.Sprintf("  %-14s", m.name))
+				descPart := lipgloss.NewStyle().Foreground(lipgloss.Color("242")).
+					Render(" " + m.desc)
+				line = cmdPart + descPart
+				w := lipgloss.Width(line)
+				if w < a.width {
+					line += strings.Repeat(" ", a.width-w)
+				}
+			}
+			viewLines[pos] = line
+		}
+		view = strings.Join(viewLines, "\n")
+	}
+
+	var v tea.View
+	v.SetContent(view)
+	v.AltScreen = true
+	v.MouseMode = tea.MouseModeCellMotion
+	v.KeyboardEnhancements.ReportEventTypes = true
+
+	// Set real terminal cursor position for accurate CJK wide-char rendering
+	if a.input.Focused() {
+		cur := a.input.Cursor()
+		if cur != nil {
+			// Y offset: chatPanel(chatH) + choiceBarH + cmdHintH
+			cur.Y += chatH + choiceBarH + cmdHintH
+			v.Cursor = cur
+		}
+	}
+
+	return v
 }

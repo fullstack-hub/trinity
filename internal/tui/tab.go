@@ -3,7 +3,7 @@ package tui
 import (
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
 )
 
 // ModelOption represents a selectable model for a tab.
@@ -169,12 +169,11 @@ func (t TabBar) HasThinking() bool {
 
 // BottomBar renders the unified bottom bar: tabs + models + thinking + shortcuts.
 func (t TabBar) BottomBar(width int) string {
-	bg := lipgloss.Color("236")
-	dim := lipgloss.NewStyle().Foreground(lipgloss.Color("242")).Background(bg)
-	key := lipgloss.NewStyle().Foreground(lipgloss.Color("252")).Bold(true).Background(bg)
-	pad := lipgloss.NewStyle().Background(bg)
+	dim := lipgloss.NewStyle().Foreground(lipgloss.Color("242"))
+	key := lipgloss.NewStyle().Foreground(lipgloss.Color("252")).Bold(true)
 
-	right := key.Render("ctrl+t") + dim.Render(" variants  ") +
+	right := key.Render("shift+\u23ce") + dim.Render(" newline  ") +
+		key.Render("ctrl+t") + dim.Render(" variants  ") +
 		key.Render("tab") + dim.Render(" agents  ") +
 		key.Render("ctrl+p") + dim.Render(" commands")
 
@@ -184,7 +183,7 @@ func (t TabBar) BottomBar(width int) string {
 		gap = 0
 	}
 
-	return pad.Render(strings.Repeat(" ", gap)) + right
+	return strings.Repeat(" ", gap) + right
 }
 
 // providerName maps server key to display provider name.

@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/fullstack-hub/trinity/internal/config"
 	"github.com/fullstack-hub/trinity/internal/procman"
 	"github.com/fullstack-hub/trinity/internal/session"
@@ -142,7 +142,7 @@ func main() {
 			sess, _ = store.Latest(workspace) // nil if no sessions exist
 		}
 
-		p := tea.NewProgram(tui.NewApp(cfg, store, sess, workspace), tea.WithAltScreen(), tea.WithMouseCellMotion())
+		p := tea.NewProgram(tui.NewApp(cfg, store, sess, workspace))
 		if _, err := p.Run(); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
